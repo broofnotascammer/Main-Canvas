@@ -1,0 +1,543 @@
+// whiteboard-backend/package.json
+{
+  "name": "whiteboard-backend",
+  "version": "1.0.0",
+  "description": "Real-time backend for a collaborative drawing canvas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "socket.io",
+    "realtime",
+    "whiteboard",
+    "drawing"
+  ],
+  "author": "Your Name",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
+JavaScript
+
+// whiteboard-backend/server.js
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+    cors: {
+        // IMPORTANT: In production, change '*' to the specific URL(s) of your frontend(s)
+        // For now, '*' allows any origin during development and initial testing.
+        // Example for your future GitHub Pages site: "https://yourusername.github.io"
+        origin: "*", 
+        methods: ["GET", "POST"]
+    }
+});
+
+const PORT = process.env.PORT || 10000;
+
+// Listen for new client connections
+io.on('connection', (socket) => {
+    console.log(`User connected: ${socket.id}`);
+
+    // Listen for 'drawingData' events from clients (when a user draws a segment)
+    socket.on('drawingData', (data) => {
+        // Broadcast the drawing data to all *other* connected clients
+        // 'broadcast.emit' ensures the sender doesn't receive their own drawing data back,
+        // as they've already drawn it locally.
+        socket.broadcast.emit('drawingData', data);
+    });
+
+    // Listen for 'clearCanvas' events from clients
+    socket.on('clearCanvas', () => {
+        // Broadcast the 'clearCanvas' event to all *other* connected clients
+        socket.broadcast.emit('clearCanvas');
+        console.log(`Canvas clear request received from ${socket.id}. Broadcasting.`);
+    });
+
+    // Listen for client disconnections
+    socket.on('disconnect', () => {
+        console.log(`User disconnected: ${socket.id}`);
+    });
+});
+
+// Start the server
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Whiteboard backend server running on http://0.0.0.0:${PORT}`);
+});
+Dockerfile
+
+# whiteboard-backend/Dockerfile
+# Use an official Node.js runtime as a parent image
+FROM node:20-alpine
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json (or yarn.lock) to the working directory
+# We copy these first to leverage Docker's build cache
+COPY package*.json ./
+
+# Install application dependencies
+# The --omit=dev flag ensures devDependencies are not installed in the production image
+RUN npm install --omit=dev
+
+# Copy the rest of your application code to the working directory
+COPY . .
+
+# Expose the port your app will run on. This should match the PORT in your server.js
+EXPOSE 10000
+
+# Define the command to run your app
+CMD [ "npm", "start" ]
+# whiteboard-backend/.dockerignore
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+Dockerfile
+README.md
+*.log
+2. Deploy Your Backend to Render:
+
+Create a Git Repository: Push your whiteboard-backend folder (containing package.json, server.js, Dockerfile, .dockerignore) to a new, dedicated GitHub repository (e.g., your-username/whiteboard-backend).
+Go to Render: Log in to https://render.com/.
+Create a New Web Service: Click "New" -> "Web Service".
+Connect Repository: Connect your newly created whiteboard-backend GitHub repository.
+Configure Service:
+Name: Give your service a clear name (e.g., my-whiteboard-server).
+Runtime: Select "Docker". Render will automatically detect your Dockerfile.
+Region: Choose a region close to your users.
+Branch: Usually main or master.
+Root Directory: Leave empty if your Dockerfile is at the root.
+Create Web Service: Click "Create Web Service".
+Wait for Deployment: Render will now build and deploy your backend. This might take a few minutes. Wait until the service status shows "Live".
+Copy Your Backend URL: Once it's live, copy the URL provided by Render (e.g., https://my-whiteboard-server.onrender.com). You'll need this URL for your frontend!
+Part 2: New Frontend Website (whiteboard-frontend)
+This is the interactive part of your application – the actual drawing canvas with all the tools.
+
+1. Create Your Frontend Project Files:
+Create a new folder on your computer named whiteboard-frontend. Inside this folder, create just one file:
+
+index.html
+Copy the code provided below into your index.html file.
+
+HTML
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Whiteboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #e2e8f0; /* Light blue-gray */
+            color: #2d3748; /* Dark gray */
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 1000px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        h1 {
+            color: #2c5282; /* Blue */
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-align: center;
+        }
+        #controls {
+            background-color: #ffffff;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        label {
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #4a5568;
+        }
+        input[type="color"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
+        input[type="color"]::-moz-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-moz-color-swatch { border: none; border-radius: 5px; }
+        input[type="range"] {
+            width: 100px;
+            cursor: pointer;
+        }
+        .tool-button, #clear-canvas-button {
+            padding: 10px 15px;
+            background-color: #4299e1; /* Blue */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .tool-button:hover, #clear-canvas-button:hover {
+            background-color: #3182ce;
+            transform: translateY(-1px);
+        }
+        .tool-button.active {
+            background-color: #2c5282; /* Darker blue for active tool */
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        #clear-canvas-button {
+            background-color: #e53e3e; /* Red */
+        }
+        #clear-canvas-button:hover {
+            background-color: #c53030;
+        }
+
+        canvas {
+            border: 2px solid #a0aec0; /* Blue-gray */
+            background-color: white;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #controls {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px;
+            }
+            .control-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+            input[type="range"] {
+                width: 150px;
+            }
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Collaborative Whiteboard</h1>
+
+        <div id="controls">
+            <div class="control-group">
+                <label for="color-picker">Color:</label>
+                <input type="color" id="color-picker" value="#000000">
+            </div>
+            <div class="control-group">
+                <label for="thickness-slider">Size:</label>
+                <input type="range" id="thickness-slider" min="1" max="50" value="5">
+            </div>
+            <div class="control-group">
+                <button class="tool-button active" data-tool="marker">Marker</button>
+                <button class="tool-button" data-tool="highlighter">Highlighter</button>
+                <button class="tool-button" data-tool="brush">Brush</button>
+                <button class="tool-button" data-tool="eraser">Eraser</button>
+            </div>
+            <div class="control-group">
+                <button id="clear-canvas-button">Clear Canvas</button>
+            </div>
+        </div>
+
+        <canvas id="whiteboard-canvas"></canvas>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <script>
+        const canvas = document.getElementById('whiteboard-canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('color-picker');
+        const thicknessSlider = document.getElementById('thickness-slider');
+        const toolButtons = document.querySelectorAll('.tool-button');
+        const clearCanvasButton = document.getElementById('clear-canvas-button');
+
+        // IMPORTANT: Replace this with YOUR Whiteboard Backend Render service URL!
+        // This URL is what you copied from Render after deploying your backend.
+        const SERVER_URL = 'YOUR_WHITEBOARD_BACKEND_RENDER_URL_HERE'; 
+
+        let drawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Current drawing settings
+        let currentColor = colorPicker.value;
+        let currentThickness = parseInt(thicknessSlider.value);
+        let currentTool = 'marker'; // 'marker', 'highlighter', 'brush', 'eraser'
+
+        // Connect to the Socket.IO server
+        const socket = io(SERVER_URL);
+
+        // --- Canvas Initialization ---
+        function initializeCanvas() {
+            // Set canvas resolution for crisp drawing (different from display size)
+            canvas.width = 800; // Internal drawing resolution
+            canvas.height = 600;
+
+            // Set display size based on container and aspect ratio
+            const containerWidth = canvas.parentElement.offsetWidth;
+            const aspectRatio = canvas.width / canvas.height;
+            let displayWidth = Math.min(containerWidth, 800); // Max display width 800px
+            let displayHeight = displayWidth / aspectRatio;
+
+            // Adjust if height is too large for the viewport
+            if (displayHeight > window.innerHeight * 0.7) { // 70% of viewport height
+                displayHeight = window.innerHeight * 0.7;
+                displayWidth = displayHeight * aspectRatio;
+            }
+
+            canvas.style.width = `${displayWidth}px`;
+            canvas.style.height = `${displayHeight}px`;
+
+            // Initial drawing context settings
+            ctx.lineCap = 'round'; // Rounds the ends of lines for smoother strokes
+            ctx.lineJoin = 'round'; // Rounds the corners of lines for smoother connections
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = currentThickness;
+        }
+
+        // Call initialization on load and whenever the window is resized
+        window.onload = initializeCanvas;
+        window.onresize = initializeCanvas;
+
+
+        // --- Socket.IO Event Listeners ---
+
+        socket.on('connect', () => {
+            console.log('Connected to whiteboard server!');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server.');
+        });
+
+        // Listen for drawing data from other clients and draw it
+        socket.on('drawingData', (data) => {
+            drawStroke(data);
+        });
+
+        // Listen for canvas clear command from other clients
+        socket.on('clearCanvas', () => {
+            clearCanvasLocal();
+        });
+
+        // --- Drawing Logic ---
+
+        // Helper to get coordinates relative to the canvas
+        function getCanvasCoordinates(event) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+
+            // Handle touch events
+            if (event.touches && event.touches.length > 0) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else { // Handle mouse events
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+
+            // Scale coordinates from display size (CSS pixels) to internal canvas resolution (drawing pixels)
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            return [x, y];
+        }
+
+        // Function to start a drawing stroke (mouse down or touch start)
+        function startDrawing(e) {
+            drawing = true;
+            [lastX, lastY] = getCanvasCoordinates(e);
+            
+            // For brush tool, draw a single dot immediately for better user experience
+            if (currentTool === 'brush' || currentTool === 'marker' || currentTool === 'highlighter' || currentTool === 'eraser') {
+                const data = {
+                    x1: lastX, y1: lastY, x2: lastX, y2: lastY, // Dot has same start/end
+                    color: currentColor, thickness: currentThickness, tool: currentTool, 
+                    erase: currentTool === 'eraser'
+                };
+                drawStroke(data); // Draw locally
+                socket.emit('drawingData', data); // Send to server
+            }
+        }
+
+        // Function to draw a line segment (mouse move or touch move)
+        function draw(e) {
+            if (!drawing) return;
+            const [currentX, currentY] = getCanvasCoordinates(e);
+
+            const data = {
+                x1: lastX, y1: lastY,
+                x2: currentX, y2: currentY,
+                color: currentColor,
+                thickness: currentThickness,
+                tool: currentTool,
+                erase: currentTool === 'eraser'
+            };
+
+            drawStroke(data); // Draw locally
+            socket.emit('drawingData', data); // Send to server for others
+
+            // Update last coordinates for the next segment
+            [lastX, lastY] = [currentX, currentY];
+        }
+
+        // Function to stop drawing (mouse up or touch end/leave)
+        function stopDrawing() {
+            drawing = false;
+        }
+
+        /**
+         * Draws a single stroke on the canvas based on received data.
+         * This function is used for both local drawing and drawing from server data.
+         * @param {Object} data - Drawing stroke data ({x1, y1, x2, y2, color, thickness, tool, erase})
+         */
+        function drawStroke(data) {
+            ctx.beginPath();
+
+            // Save current context state
+            ctx.save();
+
+            // Set context properties based on tool and erase flag
+            if (data.erase) {
+                ctx.globalCompositeOperation = 'destination-out'; // 'erase' effect
+                ctx.strokeStyle = '#000000'; // Color doesn't matter, but needs to be set
+                ctx.lineWidth = data.thickness + 5; // Eraser often feels better a bit larger
+            } else {
+                ctx.globalCompositeOperation = 'source-over'; // Normal drawing
+                ctx.strokeStyle = data.color;
+                ctx.lineWidth = data.thickness;
+
+                if (data.tool === 'highlighter') {
+                    ctx.globalAlpha = 0.3; // Semi-transparent for highlighter
+                } else {
+                    ctx.globalAlpha = 1.0; // Fully opaque for marker/brush
+                }
+                
+                ctx.lineCap = 'round'; // Ensure consistent line caps
+                ctx.lineJoin = 'round'; // Ensure consistent line joins
+            }
+
+            // Draw the line segment
+            ctx.moveTo(data.x1, data.y1);
+            ctx.lineTo(data.x2, data.y2);
+            ctx.stroke();
+            ctx.closePath();
+
+            // Restore context state to avoid affecting subsequent drawings
+            ctx.restore();
+        }
+
+        // Clears the canvas entirely (locally)
+        function clearCanvasLocal() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- Event Listeners for User Interactions ---
+
+        // Mouse Events for Drawing
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing); // Stop if mouse leaves canvas
+
+        // Touch Events for Drawing (for mobile responsiveness)
+        // Using { passive: false } to allow preventDefault to work correctly
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e); }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchcancel', stopDrawing); // If touch is interrupted
+
+        // Color Picker
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            // If currently on eraser, switch back to marker when color changes for better UX
+            if (currentTool === 'eraser') {
+                document.querySelector('.tool-button[data-tool="marker"]').click();
+            }
+        });
+
+        // Thickness Slider
+        thicknessSlider.addEventListener('input', (e) => {
+            currentThickness = parseInt(e.target.value);
+        });
+
+        // Tool Buttons
+        toolButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove 'active' class from all buttons
+                toolButtons.forEach(btn => btn.classList.remove('active'));
+                // Add 'active' class to the clicked button
+                button.classList.add('active');
+                currentTool = button.dataset.tool;
+
+                // Reset globalCompositeOperation if switching from eraser
+                if (currentTool !== 'eraser') {
+                    ctx.globalCompositeOperation = 'source-over';
+                }
+            });
+        });
+
+        // Clear Canvas Button
+        clearCanvasButton.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear the canvas for everyone? This cannot be undone.')) {
+                clearCanvasLocal(); // Clear locally first
+                socket.emit('clearCanvas'); // Tell others to clear
+            }
+        });
+
+    </script>
+</body>
+</html>
+2. Deploy Your Frontend to GitHub Pages:
+
+Create a Git Repository: Push your whiteboard-frontend folder (containing just index.html) to a new, dedicated GitHub repository (e.g., your-username/whiteboard-frontend).
+Update SERVER_URL in index.html: Before pushing, open your wh
