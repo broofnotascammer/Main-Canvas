@@ -1,6 +1,6 @@
 # whiteboard-backend/Dockerfile
 # Use an official Node.js runtime as a parent image
-FROM node:20-alpine
+FROM node:20.10.0 # Or node:18.19.0 for an LTS version
 
 # Set the working directory in the container
 WORKDIR /app
