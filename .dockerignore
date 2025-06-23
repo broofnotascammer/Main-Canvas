@@ -1,4 +1,4 @@
-# whiteboard-backend/.dockerignore
+/ whiteboard-backend/.dockerignore
 node_modules
 npm-debug.log
 .git
@@ -7,3 +7,4 @@ npm-debug.log
 Dockerfile
 README.md
 *.log
+
