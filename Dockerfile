@@ -12,7 +12,7 @@ COPY package*.json ./
 
 # Install application dependencies
 # The --omit=dev flag ensures devDependencies are not installed in the production image
-RUN npm install --omit=dev
+RUN npm install --omit=dev --verbose 
 
 # Copy the rest of your application code to the working directory
 COPY . .
